@@ -9,9 +9,22 @@ export interface ScanResult {
   errors: number
 }
 
+/** Get the last scan timestamp, or null if never scanned. */
+function getLastScanAt(): string | null {
+  const row = db.prepare("SELECT value FROM meta WHERE key = 'last_scan_at'").get() as { value: string } | undefined
+  return row?.value || null
+}
+
+/** Update the last scan timestamp to now. */
+function setLastScanAt(): void {
+  const now = new Date().toISOString()
+  db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('last_scan_at', ?)").run(now)
+}
+
 /**
  * Scan a Maildir folder for new emails.
- * Skips files that already exist in the database (by file_path).
+ * On first run, uses MAIL_SCAN_SINCE date filter.
+ * On subsequent runs, only processes files modified after last scan.
  */
 export async function scanMaildir(
   maildirPath: string,
@@ -26,7 +39,29 @@ export async function scanMaildir(
     return result
   }
 
-  const files = fs.readdirSync(curDir)
+  const lastScanAt = getLastScanAt()
+  const isFirstScan = !lastScanAt
+  const lastScanMs = lastScanAt ? new Date(lastScanAt).getTime() : 0
+
+  console.log(`Scanning ${mailbox}: first=${isFirstScan}, lastScan=${lastScanAt || 'never'}`)
+
+  const allFiles = fs.readdirSync(curDir)
+
+  // Filter files by mtime on subsequent scans
+  const files = isFirstScan
+    ? allFiles
+    : allFiles.filter(f => {
+        try {
+          const stat = fs.statSync(path.join(curDir, f))
+          return stat.mtimeMs > lastScanMs
+        } catch {
+          return false
+        }
+      })
+
+  if (!isFirstScan) {
+    console.log(`  Incremental: ${files.length} new/changed of ${allFiles.length} total`)
+  }
 
   // Prepare statements
   const checkByPath = db.prepare('SELECT id FROM mails WHERE file_path = ?')
@@ -51,7 +86,7 @@ export async function scanMaildir(
         data.bodyText,
         data.bodyHtml,
         entry.mailbox,
-        null // ai_summary filled later on demand
+        null
       )
     }
   })
@@ -59,12 +94,11 @@ export async function scanMaildir(
   const batch: Array<{ filePath: string; data: any; mailbox: string }> = []
 
   for (const filename of files) {
-    // Skip non-mail files (Maildir uses specific naming, but be safe)
     if (filename.startsWith('.')) continue
 
     const filePath = path.join(curDir, filename)
 
-    // Check if already scanned (dedup by file_path)
+    // Dedup by file_path (already scanned)
     const existing = checkByPath.get(filePath) as { id: number } | undefined
     if (existing) {
       result.skipped++
@@ -74,7 +108,7 @@ export async function scanMaildir(
     try {
       const parsed = await parseEmlFile(filePath)
 
-      // Dedup by message_id (same email may exist in multiple files)
+      // Dedup by message_id
       if (parsed.messageId) {
         const dup = checkByMsgId.get(parsed.messageId) as { id: number } | undefined
         if (dup) {
@@ -83,22 +117,10 @@ export async function scanMaildir(
         }
       }
 
-      // Filter by date
-      if (parsed.date) {
+      // Filter by mail date (only on first scan; on incremental, we trust mtime)
+      if (isFirstScan && parsed.date) {
         const mailDate = new Date(parsed.date)
-        if (mailDate < since) {
-          // Insert a placeholder so we don't re-scan it, but mark with old date
-          // Actually, let's skip old mails entirely and NOT insert placeholder.
-          // The user said "ignore" - so we skip and don't record.
-          // But wait - this means we'll re-scan each time. Let's handle this
-          // by inserting a minimal record for old mails too, to prevent rescan.
-          // Actually, the user said "all mails before that date is irrelevant
-          // and should be ignored." Let me create a separate table or just
-          // insert with a flag. Simplest: insert with body=null and a note.
-          // Or: just skip and accept re-scan. For now, skip.
-          // Hmm, re-reading: "should be ignored" - skip them completely.
-          continue
-        }
+        if (mailDate < since) continue
       }
 
       batch.push({ filePath, data: parsed, mailbox })
@@ -124,7 +146,7 @@ export async function scanMaildir(
 }
 
 /**
- * Scan both INBOX and Sent folders.
+ * Scan both INBOX and Sent folders, then update last_scan_at.
  */
 export async function scanAll(
   inboxPath: string,
@@ -133,5 +155,6 @@ export async function scanAll(
 ): Promise<{ inbox: ScanResult; sent: ScanResult }> {
   const inbox = await scanMaildir(inboxPath, 'INBOX', since)
   const sent = await scanMaildir(sentPath, 'Sent', since)
+  setLastScanAt()
   return { inbox, sent }
 }

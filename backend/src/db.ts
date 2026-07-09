@@ -56,6 +56,11 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_actions_mail_id ON actions(mail_id);
   CREATE INDEX IF NOT EXISTS idx_actions_status ON actions(status);
+
+  CREATE TABLE IF NOT EXISTS meta (
+    key TEXT PRIMARY KEY,
+    value TEXT
+  );
 `)
 
 // Migration: add ai_summary column if not exists
