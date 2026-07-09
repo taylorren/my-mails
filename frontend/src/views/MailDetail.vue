@@ -2,6 +2,7 @@
 import { onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useMailDetailStore } from '@/stores/mails'
+import { User } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
@@ -93,7 +94,7 @@ function toList(addrs: string | null): { name: string; email: string }[] {
             <div class="flex-1">
               <div class="text-sm font-medium">{{ action.summary }}</div>
               <div class="text-xs text-muted-foreground mt-1 flex gap-3">
-                <span v-if="action.action_by">👤 {{ action.action_by }}</span>
+                <span v-if="action.action_by"><User class="w-3 h-3 inline" /> {{ action.action_by }}</span>
                 <span>{{ formatDate(action.created_at) }}</span>
                 <span
                   class="px-1.5 py-0.5 rounded text-xs font-medium"

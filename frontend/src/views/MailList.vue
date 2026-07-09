@@ -3,6 +3,7 @@ import { onMounted, ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useMailStore, useMailDetailStore } from '@/stores/mails'
 import type { MailListItem } from '@/stores/mails'
+import { Inbox, Send, RefreshCw, Sparkles, ClipboardCheck, User } from 'lucide-vue-next'
 
 const router = useRouter()
 const route = useRoute()
@@ -177,8 +178,8 @@ async function regenerate() {
 }
 
 const folders = [
-  { key: 'INBOX', label: '收件箱', icon: '📥', count: () => store.counts.inbox },
-  { key: 'Sent', label: '已发送', icon: '📤', count: () => store.counts.sent },
+  { key: 'INBOX', label: '收件箱', component: Inbox, count: () => store.counts.inbox },
+  { key: 'Sent', label: '已发送', component: Send, count: () => store.counts.sent },
 ]
 </script>
 
@@ -187,7 +188,14 @@ const folders = [
     <!-- Col 1: Folders -->
     <aside class="w-52 shrink-0 border-r bg-card flex flex-col">
       <div class="p-4 border-b">
-        <h1 class="text-lg font-bold tracking-tight">📬 Mails</h1>
+        <h1 class="text-lg font-bold tracking-tight flex items-center gap-2">
+          <svg class="w-5 h-5 text-blue-600" viewBox="0 0 32 32" fill="none">
+            <rect width="32" height="32" rx="6" fill="currentColor"/>
+            <path d="M6 10l10 7 10-7" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <rect x="6" y="8" width="20" height="16" rx="2" stroke="white" stroke-width="2.5"/>
+          </svg>
+          Mails
+        </h1>
       </div>
       <nav class="flex-1 p-3 space-y-1">
         <button
@@ -196,7 +204,7 @@ const folders = [
           :class="store.mailbox === f.key ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted text-foreground'"
           @click="store.setMailbox(f.key)"
         >
-          <span>{{ f.icon }}</span><span class="flex-1">{{ f.label }}</span>
+          <component :is="f.component" class="w-4 h-4" /><span class="flex-1">{{ f.label }}</span>
           <span class="text-xs text-muted-foreground tabular-nums">{{ f.count() }}</span>
         </button>
       </nav>
@@ -204,7 +212,7 @@ const folders = [
         <button
           class="w-full inline-flex items-center justify-center gap-2 px-3 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 transition"
           :disabled="scanning" @click="triggerScan"
-        >{{ scanning ? '扫描中...' : '🔄 扫描邮件' }}</button>
+        ><RefreshCw :class="['w-4 h-4', scanning && 'animate-spin']" />{{ scanning ? '扫描中...' : '扫描邮件' }}</button>
       </div>
     </aside>
 
@@ -284,7 +292,7 @@ const folders = [
             <button
               class="text-[11px] px-2.5 py-1 rounded-lg border bg-white hover:bg-muted transition shadow-sm"
               @click="showBody = !showBody"
-            >{{ showBody ? '📩 收起邮件' : '📩 展开邮件' }}</button>
+            >{{ showBody ? '收起邮件' : '展开邮件' }}</button>
             <div class="flex items-center gap-1" v-if="models.length > 0">
               <select v-model="selectedHost"
                 class="text-[11px] border rounded-lg px-2 py-1 bg-white shadow-sm"
@@ -298,14 +306,14 @@ const folders = [
               <button
                 class="text-[11px] px-3 py-1 rounded-lg font-medium bg-indigo-500 text-white hover:bg-indigo-600 transition disabled:opacity-50 shadow-sm"
                 :disabled="regenerating" @click="regenerate"
-              >{{ regenerating ? '...' : '✨ 重新生成' }}</button>
+              >{{ regenerating ? '...' : '重新生成' }}</button>
             </div>
           </div>
 
           <!-- AI Summary -->
           <div class="px-4 pb-4">
             <h3 class="text-[11px] font-semibold text-indigo-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-              <span class="w-5 h-5 rounded-md bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs">🤖</span>
+              <span class="w-5 h-5 rounded-md bg-indigo-100 text-indigo-600 flex items-center justify-center"><Sparkles class="w-3.5 h-3.5" /></span>
               AI 摘要
             </h3>
             <div v-if="regenerating" class="flex items-center gap-2 text-xs text-indigo-500 italic py-6 bg-white/60 rounded-xl border border-dashed border-indigo-200 justify-center">
@@ -326,7 +334,7 @@ const folders = [
           <!-- Actions -->
           <div class="px-4 pb-4">
             <h3 class="text-[11px] font-semibold text-amber-600 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-              <span class="w-5 h-5 rounded-md bg-amber-100 text-amber-600 flex items-center justify-center text-xs">📋</span>
+              <span class="w-5 h-5 rounded-md bg-amber-100 text-amber-600 flex items-center justify-center"><ClipboardCheck class="w-3.5 h-3.5" /></span>
               跟进事项
               <span v-if="detail.mail.actions.length > 0" class="text-[10px] font-normal text-muted-foreground ml-auto">{{ detail.mail.actions.filter(a => a.status === 'open').length }} 进行中</span>
             </h3>
@@ -339,7 +347,7 @@ const folders = [
                 <div class="flex-1 min-w-0">
                   <div class="text-sm leading-snug" :class="action.status === 'closed' ? 'line-through text-muted-foreground' : ''">{{ action.summary }}</div>
                   <div class="text-[10px] text-muted-foreground mt-1.5 flex items-center gap-2">
-                    <span v-if="action.action_by" class="inline-flex items-center gap-1">👤 {{ action.action_by }}</span>
+                    <span v-if="action.action_by" class="inline-flex items-center gap-1"><User class="w-3 h-3" /> {{ action.action_by }}</span>
                     <span>{{ formatDate(action.created_at) }}</span>
                   </div>
                 </div>

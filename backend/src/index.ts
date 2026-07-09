@@ -15,9 +15,17 @@ import { ollamaRoutes } from './routes/ollama.js'
 
 const app = new Hono()
 
-// CORS for frontend dev server
+// CORS for frontend dev server (local + LAN)
 app.use('/*', cors({
-  origin: ['http://localhost:5173', 'http://localhost:3001'],
+  origin: (origin) => {
+    // Allow localhost and any LAN IP (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
+    if (!origin) return origin
+    if (origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1')) return origin
+    if (/^https?:\/\/192\.168\./.test(origin)) return origin
+    if (/^https?:\/\/10\./.test(origin)) return origin
+    if (/^https?:\/\/172\.(1[6-9]|2\d|3[01])\./.test(origin)) return origin
+    return origin
+  },
   allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
 }))
 
@@ -32,7 +40,7 @@ app.get('/api/health', (c) => c.json({ ok: true }))
 
 const port = Number(process.env.PORT) || 3001
 
-console.log(`🚀 Backend starting on http://localhost:${port}`)
+console.log(`🚀 Backend starting on http://0.0.0.0:${port}`)
 const hosts: string[] = []
 if (process.env.OLLAMA_HOST_LOCAL) hosts.push(`🖥️ local: ${process.env.OLLAMA_HOST_LOCAL}`)
 if (process.env.OLLAMA_HOST_LAN) hosts.push(`🏠 lan: ${process.env.OLLAMA_HOST_LAN}`)
@@ -42,4 +50,5 @@ console.log(`🤖 Ollama: ${process.env.OLLAMA_MODEL || 'hermes3:latest'} | ${ho
 serve({
   fetch: app.fetch,
   port,
+  hostname: '0.0.0.0',
 })
